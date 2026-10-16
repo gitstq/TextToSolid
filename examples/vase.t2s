@@ -1,0 +1,17 @@
+# Hollow vase revolved from a profile
+difference {
+    revolve(360, segments=64) {
+        polygon([
+            (0, 0), (20, 0), (21, 3), (21, 30),
+            (15, 45), (15, 55), (19, 58), (17, 60), (0, 60)
+        ])
+    }
+    translate(0, 3, 0) {
+        revolve(360, segments=64) {
+            polygon([
+                (0, 0), (17, 0), (18, 2), (18, 27),
+                (12, 42), (12, 52), (16, 55), (14, 57), (0, 57)
+            ])
+        }
+    }
+}

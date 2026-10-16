@@ -1,0 +1,19 @@
+# L-bracket with four mounting holes
+# A base plate plus a vertical rib, drilled for M3 screws.
+let t = 4          # plate thickness
+let W = 40         # overall width
+let D = 20         # overall depth
+let H = 30         # rib height
+let hole = 1.7     # M3 clearance radius
+
+difference {
+    union {
+        box(W, D, t)
+        translate(0, 0, t / 2 + H / 2) { box(W, D, H) }
+    }
+    repeat(2, translate=(28, 0, 0)) {
+        repeat(2, translate=(0, 14, 0)) {
+            translate(0, 0, 0) { cylinder(r=hole, h=t * 3) }
+        }
+    }
+}

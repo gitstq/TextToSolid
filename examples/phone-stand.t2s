@@ -1,0 +1,14 @@
+# Phone stand: base plate, tilted back support and retaining lip
+let W = 70
+let D = 60
+let T = 4
+
+difference {
+    union {
+        box(W, D, T)
+        translate(0, -26, 30) { rotate(-72, 0, 0) { box(W, T, 58) } }
+        translate(0, -8, 54) { rotate(-72, 0, 0) { box(W, 8, T) } }
+    }
+    translate(0, 26, 0) { cylinder(r=7, h=T + 2) }   # cable notch
+    translate(0, 26, 0) { box(10, 20, T + 2) }
+}
