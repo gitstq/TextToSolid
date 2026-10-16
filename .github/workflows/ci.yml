@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    name: Syntax check, unit tests & smoke build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Syntax check (compileall)
+        run: python -m compileall -q texttosolid tests
+
+      - name: Unit tests (unittest)
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke build - DSL example to STL
+        shell: bash
+        run: |
+          python -m texttosolid example gear -o gear_smoke.stl
+          test -s gear_smoke.stl
+
+      - name: Smoke build - Agent JSON spec to OBJ
+        shell: bash
+        run: |
+          printf '%s' '{"shapes":[{"op":"difference","shapes":[{"op":"box","w":20,"d":20,"h":10},{"op":"cylinder","r":3,"h":40}]}]}' > spec.json
+          python -m texttosolid spec spec.json -o spec_smoke.obj
+          test -s spec_smoke.obj
