@@ -73,7 +73,7 @@ class DSLTests(unittest.TestCase):
         self.assertAlmostEqual(mesh.volume(), 8.0, places=6)
 
     def test_mirror_transform(self):
-        mesh = evaluate('mirror("y") { box(2, 2, 2, at=(3, 0, 0)) }')
+        mesh = evaluate('mirror("x") { box(2, 2, 2, at=(3, 0, 0)) }')
         self.assertAlmostEqual(mesh.volume(), 8.0, places=6)
         self.assertEqual(mesh.center().x, -3.0)
 

@@ -12,8 +12,9 @@ Everything is pure standard library and works on any closed manifold mesh.
 """
 from __future__ import annotations
 
+import math
 import sys
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .mesh import Mesh, RGB
 from .vec import Vec3
@@ -263,51 +264,106 @@ def _mesh_to_polygons(mesh: Mesh) -> List[Polygon]:
     return polygons
 
 
+def _weld_vertices(
+    vertices: List[Vec3], faces: List[Tuple[int, int, int]], tol: float
+) -> Tuple[List[Vec3], List[Tuple[int, int, int]], List[int]]:
+    """Merge vertices closer than ``tol`` and drop degenerate/duplicate faces.
+
+    Returns the merged vertices, the remapped faces and, for every kept face,
+    the index of the original face it came from (so per-face colors stay
+    aligned).  A uniform grid keeps the pass near-linear.
+    """
+    cell = tol if tol > 0 else 1.0
+    grid: Dict[Tuple[int, int, int], List[int]] = {}
+    remap: List[int] = [0] * len(vertices)
+    kept: List[Vec3] = []
+    for i, v in enumerate(vertices):
+        gx, gy, gz = math.floor(v.x / cell), math.floor(v.y / cell), math.floor(v.z / cell)
+        target = None
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for j in grid.get((gx + dx, gy + dy, gz + dz), ()):
+                        if (kept[remap[j]] - v).length_sq() <= tol * tol:
+                            target = remap[j]
+                            break
+                    if target is not None:
+                        break
+                if target is not None:
+                    break
+            if target is not None:
+                break
+        if target is None:
+            target = len(kept)
+            kept.append(v)
+            grid.setdefault((gx, gy, gz), []).append(i)
+        remap[i] = target
+
+    seen = set()
+    new_faces: List[Tuple[int, int, int]] = []
+    origin: List[int] = []
+    for fi, (i, j, k) in enumerate(faces):
+        tri = (remap[i], remap[j], remap[k])
+        if tri[0] == tri[1] or tri[1] == tri[2] or tri[0] == tri[2]:
+            continue
+        key = tuple(sorted(tri))
+        if key in seen:
+            continue
+        seen.add(key)
+        new_faces.append(tri)
+        origin.append(fi)
+    return kept, new_faces, origin
+
+
 def _polygons_to_mesh(
     polygons: Iterable[Polygon], name: str = "model", units: str = "mm"
 ) -> Mesh:
-    """Rebuild a welded mesh from BSP polygons.
+    """Rebuild a welded, manifold mesh from BSP polygons.
 
-    Vertices are snapped (welded) so that coincident split points share an
-    index again; duplicate and degenerate faces are dropped.  This keeps the
-    result manifold-checkable.
+    Duplicate coplanar faces contributed by both operands are dropped at the
+    polygon level (same plane and vertex set — they only differ in fan diagonal
+    or winding).  Vertices are then welded with a small tolerance so that split
+    points created along curved seams coincide again, and degenerate/duplicate
+    triangles are removed.
     """
-    vertices: List[Vec3] = []
-    index_of = {}
-    faces: List[Tuple[int, int, int]] = []
-    colors: List[RGB] = []
-    has_color = False
-    seen = set()
+    raw_vertices: List[Vec3] = []
+    raw_faces: List[Tuple[int, int, int]] = []
+    raw_colors: List[Optional[RGB]] = []
+    poly_seen = set()
 
     for poly in polygons:
         if len(poly.vertices) < 3:
             continue
-        # fan-triangulate (polygons stay convex after BSP splitting)
-        idxs: List[int] = []
-        for v in poly.vertices:
-            key = (round(v.x, 7), round(v.y, 7), round(v.z, 7))
-            idx = index_of.get(key)
-            if idx is None:
-                idx = len(vertices)
-                index_of[key] = idx
-                vertices.append(v)
-            idxs.append(idx)
+        vkey = frozenset(
+            (round(v.x, 5), round(v.y, 5), round(v.z, 5)) for v in poly.vertices
+        )
+        nrm = poly.plane.normal
+        pkey = (
+            round(nrm.x, 4), round(nrm.y, 4), round(nrm.z, 4),
+            round(poly.plane.w, 4), vkey,
+        )
+        if pkey in poly_seen:
+            continue
+        poly_seen.add(pkey)
+        base = len(raw_vertices)
+        raw_vertices.extend(poly.vertices)
+        idxs = list(range(base, base + len(poly.vertices)))
         for t in range(1, len(idxs) - 1):
             tri = (idxs[0], idxs[t], idxs[t + 1])
             if tri[0] == tri[1] or tri[1] == tri[2] or tri[0] == tri[2]:
                 continue
-            key = tuple(sorted(tri))
-            if key in seen:
-                continue
-            seen.add(key)
-            faces.append(tri)
-            if poly.color is not None:
-                colors.append(poly.color)
-                has_color = True
-            else:
-                colors.append((0.75, 0.75, 0.75))
+            raw_faces.append(tri)
+            raw_colors.append(poly.color)
 
-    mesh = Mesh(vertices, faces, colors if has_color else None, name, units)
+    vertices, faces, origin = _weld_vertices(raw_vertices, raw_faces, tol=1e-4)
+    has_color = any(c is not None for c in raw_colors)
+    colors: Optional[List[RGB]] = None
+    if has_color:
+        colors = [
+            raw_colors[fi] if raw_colors[fi] is not None else (0.75, 0.75, 0.75)
+            for fi in origin
+        ]
+    mesh = Mesh(vertices, faces, colors, name, units)
     return mesh.fix_orientation()
 
 

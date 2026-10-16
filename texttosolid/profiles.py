@@ -269,9 +269,12 @@ def revolve(
             if ri > WELD_EPS and rj > WELD_EPS:
                 faces.append((a, b, c))
                 faces.append((a, c, d))
-            else:
-                # one endpoint on the axis: the swept piece is a single triangle
+            elif ri <= WELD_EPS:
+                # i on the axis, j off: triangle (axis_i, j_k, j_k2)
                 faces.append((a, b, c))
+            else:
+                # i off, j on the axis: triangle (i_k, i_k2, axis_j)
+                faces.append((a, d, b))
 
     if not full:
         # cap the two open boundary faces of a partial sweep
