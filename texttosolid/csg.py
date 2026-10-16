@@ -315,6 +315,89 @@ def _weld_vertices(
     return kept, new_faces, origin
 
 
+def _vertex_on_segment(
+    vertices: List[Vec3], u: int, v: int, tol: float
+) -> Optional[int]:
+    """Return a vertex (other than ``u``/``v``) lying on segment ``u-v``."""
+    a = vertices[u]
+    b = vertices[v]
+    ex, ey, ez = b.x - a.x, b.y - a.y, b.z - a.z
+    l2 = ex * ex + ey * ey + ez * ez
+    if l2 <= tol * tol:
+        return None
+    inv = 1.0 / l2
+    tol2 = tol * tol
+    for w in range(len(vertices)):
+        if w == u or w == v:
+            continue
+        p = vertices[w]
+        apx, apy, apz = p.x - a.x, p.y - a.y, p.z - a.z
+        t = (apx * ex + apy * ey + apz * ez) * inv
+        if t <= 1e-6 or t >= 1.0 - 1e-6:
+            continue
+        dx = apx - ex * t
+        dy = apy - ey * t
+        dz = apz - ez * t
+        if dx * dx + dy * dy + dz * dz <= tol2:
+            return w
+    return None
+
+
+def _remove_t_junctions(
+    vertices: List[Vec3],
+    faces: List[Tuple[int, int, int]],
+    colors: Optional[List[RGB]],
+    tol: float,
+    max_passes: int = 128,
+) -> Tuple[List[Vec3], List[Tuple[int, int, int]], Optional[List[RGB]]]:
+    """Split edges that have a vertex lying on them (T-junctions).
+
+    After a boolean op the two operands may triangulate a shared boundary
+    differently, leaving a vertex in the middle of a neighbour's edge.  Such a
+    T-junction breaks the "every edge shared by exactly two faces" invariant,
+    so the offending edge is split until the mesh becomes conformal.
+    """
+    for _ in range(max_passes):
+        counts: Dict[Tuple[int, int], int] = {}
+        for i, j, k in faces:
+            for a, b in ((i, j), (j, k), (k, i)):
+                e = (a, b) if a < b else (b, a)
+                counts[e] = counts.get(e, 0) + 1
+        wmap: Dict[Tuple[int, int], int] = {}
+        for (u, v) in counts:
+            if counts[(u, v)] == 2:
+                continue
+            w = _vertex_on_segment(vertices, u, v, tol)
+            if w is not None:
+                wmap[(u, v)] = w
+                wmap[(v, u)] = w
+        if not wmap:
+            break
+        new_faces: List[Tuple[int, int, int]] = []
+        new_colors: Optional[List[RGB]] = [] if colors is not None else None
+        for fi, (a, b, c) in enumerate(faces):
+            tri = (a, b, c)
+            done = False
+            for e in range(3):
+                p, q, r = tri[e], tri[(e + 1) % 3], tri[(e + 2) % 3]
+                if (p, q) in wmap:
+                    w = wmap[(p, q)]
+                    new_faces.append((p, w, r))
+                    new_faces.append((w, q, r))
+                    if colors is not None and new_colors is not None:
+                        new_colors.append(colors[fi])
+                        new_colors.append(colors[fi])
+                    done = True
+                    break
+            if not done:
+                new_faces.append(tri)
+                if colors is not None and new_colors is not None:
+                    new_colors.append(colors[fi])
+        faces = new_faces
+        colors = new_colors
+    return vertices, faces, colors
+
+
 def _polygons_to_mesh(
     polygons: Iterable[Polygon], name: str = "model", units: str = "mm"
 ) -> Mesh:
@@ -363,6 +446,7 @@ def _polygons_to_mesh(
             raw_colors[fi] if raw_colors[fi] is not None else (0.75, 0.75, 0.75)
             for fi in origin
         ]
+    vertices, faces, colors = _remove_t_junctions(vertices, faces, colors, tol=1e-4)
     mesh = Mesh(vertices, faces, colors, name, units)
     return mesh.fix_orientation()
 
