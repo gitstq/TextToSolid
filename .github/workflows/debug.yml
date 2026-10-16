@@ -1,0 +1,38 @@
+name: DEBUG-CSG
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Diagnose CSG watertightness
+        shell: bash
+        run: |
+          python - <<'PY'
+          from texttosolid import box, cylinder
+          from texttosolid.csg import intersect, subtract, union
+          cases = [
+            ("intersect_boxes", intersect(box(10,10,10), box(10,10,10, at=(5,0,0)))),
+            ("subtract_cyl", subtract(box(10,10,10), cylinder(r=2,h=20,segments=64))),
+            ("union_overlap", union(box(10,10,10), box(10,10,10, at=(5,0,0)))),
+          ]
+          for label, m in cases:
+            nme = m.non_manifold_edges()
+            print(label, "tris", m.triangle_count, "watertight", m.is_watertight(),
+                  "nme", len(nme), "vol", round(m.volume(),3),
+                  "degen", len(m.degenerate_faces()))
+            ec = m.edge_counts()
+            for e in nme[:8]:
+                print("   nme edge", e, "count", ec.get(e))
+          b = box(10,10,10)
+          print("raw box watertight", b.is_watertight(), "tris", b.triangle_count)
+          c = cylinder(r=2,h=20,segments=64)
+          print("raw cyl watertight", c.is_watertight(), "tris", c.triangle_count)
+          PY
