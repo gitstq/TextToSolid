@@ -66,6 +66,9 @@ class Plane:
         self.normal = -self.normal
         self.w = -self.w
 
+    def clone(self) -> "Plane":
+        return Plane(self.normal, self.w)
+
     def split_polygon(
         self, polygon: "Polygon"
     ) -> Tuple[List["Polygon"], List["Polygon"], List["Polygon"], List["Polygon"]]:

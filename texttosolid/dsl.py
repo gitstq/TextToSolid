@@ -702,7 +702,7 @@ def _build_profile(statement: Statement, variables: Dict[str, float]) -> Profile
     line = statement.line
     if name == "polygon":
         allowed = {"points"}
-        values, kwargs = _collect_args(statement, [], sorted(allowed))
+        values, kwargs = _collect_args(statement, ["points"], sorted(allowed))
         if "points" not in kwargs and "points" not in values:
             raise ParseError("polygon() needs a points=[[x, y], ...] argument (line {0})".format(line))
         node = kwargs.get("points") or values.get("points")

@@ -46,7 +46,7 @@ class TransformTests(unittest.TestCase):
 
     def test_scale_per_axis(self):
         mesh = scale(box(2, 2, 2), (2, 1, 1))
-        self.assertAlmostEqual(mesh.volume(), 8.0, places=9)
+        self.assertAlmostEqual(mesh.volume(), 16.0, places=9)
         size = mesh.size()
         self.assertEqual((size.x, size.y, size.z), (4.0, 2.0, 2.0))
 

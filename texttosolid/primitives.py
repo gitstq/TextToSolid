@@ -85,18 +85,24 @@ def _connect_rings(bottom: Sequence[Vec3], top: Sequence[Vec3]) -> List[Tuple[in
     return faces
 
 
-def _cap(center: Vec3, ring: Sequence[Vec3], normal_y: float) -> List[Tuple[int, int, int]]:
-    """Triangle fan closing a ring around ``center`` (normal along ±Y)."""
-    if len(ring) <= 1:
-        return []
-    c_idx = len(ring)
+def _cap_fan(
+    center_index: int, ring_base: int, count: int, normal_y: float
+) -> List[Tuple[int, int, int]]:
+    """Triangle fan closing a ring around a center vertex (normal along ±Y).
+
+    ``ring_base`` is the index of the ring's first vertex and the ring spans
+    ``count`` consecutive vertices.  ``center_index`` is the fan apex, which the
+    caller must already have appended to the vertex list.
+    """
     faces: List[Tuple[int, int, int]] = []
-    for i in range(len(ring)):
-        j = (i + 1) % len(ring)
+    for i in range(count):
+        j = (i + 1) % count
+        a = ring_base + i
+        b = ring_base + j
         if normal_y >= 0:
-            faces.append((c_idx, i, j))
+            faces.append((center_index, a, b))
         else:
-            faces.append((c_idx, j, i))
+            faces.append((center_index, b, a))
     return faces
 
 
@@ -192,10 +198,15 @@ def cylinder(
     hy = h / 2.0
     bottom = _ring(r, -hy, segments)
     top = _ring(r, hy, segments)
+    n = len(bottom)
     vertices = list(bottom) + list(top)
+    center_b = len(vertices)
+    vertices.append(Vec3(0.0, -hy, 0.0))
+    center_t = len(vertices)
+    vertices.append(Vec3(0.0, hy, 0.0))
     faces = _connect_rings(bottom, top)
-    faces.extend(_cap(Vec3(0.0, -hy, 0.0), bottom, -1.0))
-    faces.extend(_cap(Vec3(0.0, hy, 0.0), top, +1.0))
+    faces.extend(_cap_fan(center_b, 0, n, -1.0))
+    faces.extend(_cap_fan(center_t, n, n, +1.0))
     return _finish(Mesh(vertices, faces), at, color, "cylinder")
 
 
@@ -217,12 +228,18 @@ def cone(
     hy = h / 2.0
     bottom = _ring(r1, -hy, segments)
     top = _ring(r2, hy, segments)
+    nb = len(bottom)
+    nt = len(top)
     vertices = list(bottom) + list(top)
     faces = _connect_rings(bottom, top)
     if r1 > 0:
-        faces.extend(_cap(Vec3(0.0, -hy, 0.0), bottom, -1.0))
+        center_b = len(vertices)
+        vertices.append(Vec3(0.0, -hy, 0.0))
+        faces.extend(_cap_fan(center_b, 0, nb, -1.0))
     if r2 > 0:
-        faces.extend(_cap(Vec3(0.0, hy, 0.0), top, +1.0))
+        center_t = len(vertices)
+        vertices.append(Vec3(0.0, hy, 0.0))
+        faces.extend(_cap_fan(center_t, nb, nt, +1.0))
     return _finish(Mesh(vertices, faces), at, color, "cone")
 
 
@@ -308,19 +325,19 @@ def tube(
     inner_t = _ring(ri, hy, segments)
     n = len(outer_b)
     vertices = list(outer_b) + list(outer_t) + list(inner_b) + list(inner_t)
-    ib = 2 * n  # index offset of the inner rings inside ``vertices``
+    ob, ot, ib, it = 0, n, 2 * n, 3 * n  # ring base indices inside ``vertices``
 
-    faces = _connect_rings(outer_b, outer_t)
-    # inner wall, wound the opposite way (it faces into the bore)
+    faces = _connect_rings(outer_b, outer_t)  # outer wall
+    # inner wall, offset so it references the inner rings (faces into the bore)
     faces.extend(
         (a + ib, b + ib, c + ib)
-        for a, b, c in _connect_rings(inner_t, inner_b)
+        for a, b, c in _connect_rings(inner_b, inner_t)
     )
-    # annulus caps connecting outer and inner rings
+    # annulus caps joining the outer and inner rings
     for i in range(n):
         j = (i + 1) % n
-        faces.extend(_quad(i, j, ib + j, ib + i))            # bottom
-        faces.extend(_quad(n + i, ib + i, ib + j, n + j))    # top
+        faces.extend(_quad(ob + i, ob + j, ib + j, ib + i))   # bottom
+        faces.extend(_quad(ot + i, it + i, it + j, ot + j))   # top
     return _finish(Mesh(vertices, faces), at, color, "tube")
 
 

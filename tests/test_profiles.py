@@ -29,8 +29,8 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(len(tris), 4)
 
     def test_polygon_area_ccw_positive(self):
-        self.assertAlmostEqual(polygon_area([(0, 0), (1, 0), (1, 1), (0, 1)]), 0.5)
-        self.assertAlmostEqual(polygon_area([(0, 0), (0, 1), (1, 1), (1, 0)]), -0.5)
+        self.assertAlmostEqual(polygon_area([(0, 0), (1, 0), (1, 1), (0, 1)]), 1.0)
+        self.assertAlmostEqual(polygon_area([(0, 0), (0, 1), (1, 1), (1, 0)]), -1.0)
 
     def test_triangulate_collinear_raises(self):
         with self.assertRaises(MeshError):
@@ -65,9 +65,11 @@ class ProfileTests(unittest.TestCase):
         self.assertTrue(mesh.is_watertight())
 
     def test_revolve_cone(self):
-        profile = [(0, 0), (5, 10)]
+        # closed triangular profile in (radius, y) space -> a solid cone
+        profile = [(0, 0), (5, 0), (0, 10)]
         mesh = revolve(profile, angle=360, segments=48)
         expected = (1.0 / 3.0) * math.pi * 25 * 10
+        self.assertTrue(mesh.is_watertight())
         self.assertAlmostEqual(mesh.volume(), expected, delta=expected * 0.02)
 
     def test_revolve_partial(self):

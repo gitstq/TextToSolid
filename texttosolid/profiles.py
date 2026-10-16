@@ -9,7 +9,7 @@ These operations turn flat sketches into closed solids:
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from .errors import MeshError
 from .mesh import Mesh, RGB
@@ -229,34 +229,57 @@ def revolve(
         raise MeshError("partial revolve needs a profile with at least 3 points")
 
     sweep = math.radians(angle)
+    full = abs(angle - 360.0) < 1e-9
+    m = len(pts)
+
     vertices: List[Vec3] = []
-    ring_ranges: List[Tuple[int, int]] = []
-    for k in range(segments + 1):
+    # profile points that touch the axis collapse to a single shared vertex
+    axis_vertex: Dict[int, int] = {}
+    for i, (r, y) in enumerate(pts):
+        if r <= WELD_EPS:
+            axis_vertex[i] = len(vertices)
+            vertices.append(Vec3(0.0, y, 0.0))
+
+    off_axis = [i for i, (r, _y) in enumerate(pts) if r > WELD_EPS]
+    n_rings = segments if full else segments + 1
+    ring_vertex: Dict[Tuple[int, int], int] = {}
+    for k in range(n_rings):
         theta = sweep * k / segments
-        start = len(vertices)
-        for r, y in pts:
-            vertices.append(Vec3(r * math.cos(theta), y, r * math.sin(theta)))
-        ring_ranges.append((start, start + len(pts)))
+        ct = math.cos(theta)
+        st = math.sin(theta)
+        for i in off_axis:
+            r, y = pts[i]
+            ring_vertex[(i, k)] = len(vertices)
+            vertices.append(Vec3(r * ct, y, r * st))
+
+    def vid(i: int, k: int) -> int:
+        return axis_vertex[i] if i in axis_vertex else ring_vertex[(i, k)]
 
     faces: List[Tuple[int, int, int]] = []
     for k in range(segments):
-        s0 = ring_ranges[k][0]
-        s1 = ring_ranges[k + 1][0]
-        for i in range(len(pts)):
-            j = (i + 1) % len(pts)
-            r0, _ = pts[i]
-            r1, _ = pts[j]
-            if r0 <= WELD_EPS and r1 <= WELD_EPS:
-                continue  # both on the axis — degenerate quad
-            faces.append((s0 + i, s1 + i, s1 + j))
-            faces.append((s0 + i, s1 + j, s0 + j))
+        k2 = (k + 1) % segments if full else k + 1
+        for i in range(m):
+            j = (i + 1) % m
+            ri = pts[i][0]
+            rj = pts[j][0]
+            if ri <= WELD_EPS and rj <= WELD_EPS:
+                continue  # segment lies on the axis — no swept surface
+            a, b = vid(i, k), vid(j, k)
+            c, d = vid(j, k2), vid(i, k2)
+            if ri > WELD_EPS and rj > WELD_EPS:
+                faces.append((a, b, c))
+                faces.append((a, c, d))
+            else:
+                # one endpoint on the axis: the swept piece is a single triangle
+                faces.append((a, b, c))
 
-    if angle < 360.0:
-        # cap the two open ends of a partial sweep
-        for ring_start, theta in ((ring_ranges[0][0], 0.0), (ring_ranges[-1][0], sweep)):
-            tris = triangulate_polygon(pts)
+    if not full:
+        # cap the two open boundary faces of a partial sweep
+        tris = triangulate_polygon(pts)
+        for k in (0, n_rings - 1):
+            ring = [vid(i, k) for i in range(m)]
             for a, b, c in tris:
-                faces.append((ring_start + a, ring_start + b, ring_start + c))
+                faces.append((ring[a], ring[b], ring[c]))
 
     mesh = Mesh(vertices, faces, name=name)
     if color is not None:

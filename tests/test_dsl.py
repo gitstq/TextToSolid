@@ -22,7 +22,7 @@ class DSLTests(unittest.TestCase):
 
     def test_constants_and_functions(self):
         mesh = evaluate("box(2 * pi, 2, 2)")
-        self.assertAlmostEqual(mesh.volume(), 4 * math.pi * 2 * 2, places=6)
+        self.assertAlmostEqual(mesh.volume(), 2 * math.pi * 2 * 2, places=6)
 
     def test_difference_block(self):
         src = """
@@ -75,7 +75,7 @@ class DSLTests(unittest.TestCase):
     def test_mirror_transform(self):
         mesh = evaluate('mirror("y") { box(2, 2, 2, at=(3, 0, 0)) }')
         self.assertAlmostEqual(mesh.volume(), 8.0, places=6)
-        self.assertEqual(mesh.center().y, -3.0)
+        self.assertEqual(mesh.center().x, -3.0)
 
     def test_comments_and_blank_lines(self):
         mesh = evaluate("box(2, 2, 2) # a comment\n")
