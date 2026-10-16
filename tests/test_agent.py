@@ -1,5 +1,6 @@
 """Tests for the agent JSON protocol (texttosolid.agent)."""
 import json
+import math
 import os
 import sys
 import unittest
@@ -30,7 +31,8 @@ class AgentTests(unittest.TestCase):
         }
         mesh = build_from_spec(spec)
         self.assertTrue(mesh.is_watertight())
-        self.assertAlmostEqual(mesh.volume(), 4000 - 282.74, delta=40)
+        # cylinder axis is Y; the box is 20 deep in Y, so the bore removes pi*9*20
+        self.assertAlmostEqual(mesh.volume(), 4000 - math.pi * 9 * 20, delta=40)
 
     def test_extrude_op(self):
         spec = {

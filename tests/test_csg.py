@@ -56,13 +56,14 @@ class CSGTests(unittest.TestCase):
 
     def test_subtract_all_two_holes(self):
         base = box(20, 20, 20)
-        # non-overlapping vertical holes at (0, -5) and (0, 5)
+        # two separate columns along Y, offset in X so they do not overlap
         cutters = [
-            cylinder(r=2, h=40, segments=64, at=(0, -5, 0)),
-            cylinder(r=2, h=40, segments=64, at=(0, 5, 0)),
+            cylinder(r=2, h=40, segments=64, at=(-5, 0, 0)),
+            cylinder(r=2, h=40, segments=64, at=(5, 0, 0)),
         ]
         result = subtract_all(base, cutters)
         self.assertTrue(result.is_watertight())
+        # cylinder axis is Y; each bore removes pi*4*20 through the 20-deep box
         expected = 8000 - 2 * (math.pi * 4 * 20)
         self.assertAlmostEqual(result.volume(), expected, delta=15)
 

@@ -33,7 +33,8 @@ class DSLTests(unittest.TestCase):
         """
         mesh = evaluate(src)
         self.assertTrue(mesh.is_watertight())
-        self.assertAlmostEqual(mesh.volume(), 4000 - math.pi * 9 * 10, delta=40)
+        # cylinder axis is Y; the box is 20 deep in Y, so the bore removes pi*9*20
+        self.assertAlmostEqual(mesh.volume(), 4000 - math.pi * 9 * 20, delta=40)
 
     def test_union_block(self):
         src = """
